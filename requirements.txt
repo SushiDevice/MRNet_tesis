@@ -1,0 +1,9 @@
+docopt==0.6.2
+joblib==0.13.2
+numpy==1.16.4
+pandas==0.24.2
+Pillow==6.0.0
+scikit-learn==0.21.2
+torch==1.1.0
+torchvision==0.3.0
+tqdm==4.32.1

@@ -19,6 +19,8 @@ Training options:
   --weight-decay=<wd>   Weight decay for nn.optim.Adam optimizer [default: 0.01]
   --device=<device>     Device to run code ('cpu' or 'cuda') - if not provided,
                         it will be set to the value returned by torch.cuda.is_available()
+  --train-limit=<n>     Limit number of training exams (use all if omitted)
+  --valid-limit=<n>     Limit number of validation exams (use all if omitted)
 """
 
 import sys
@@ -111,7 +113,7 @@ def update_lr_schedulers(lr_schedulers, batch_valid_losses):
         scheduler.step(v_loss)
 
 
-def main(data_dir, plane, epochs, lr, weight_decay, device=None):
+def main(data_dir, plane, epochs, lr, weight_decay, device=None, train_limit=None, valid_limit=None):
     diagnoses = ['abnormal', 'acl', 'meniscus']
 
     exp = f'{datetime.now():%Y-%m-%d_%H-%M}'
@@ -122,8 +124,8 @@ def main(data_dir, plane, epochs, lr, weight_decay, device=None):
 
     print('Creating data loaders...')
 
-    train_loader = make_data_loader(data_dir, 'train', plane, device, shuffle=True)
-    valid_loader = make_data_loader(data_dir, 'valid', plane, device)
+    train_loader = make_data_loader(data_dir, 'train', plane, device, shuffle=True, max_cases=train_limit)
+    valid_loader = make_data_loader(data_dir, 'valid', plane, device, max_cases=valid_limit)
 
     print(f'Creating models...')
 
@@ -197,9 +199,14 @@ if __name__ == '__main__':
 
     print('Parsing arguments...')
 
+    train_limit = int(arguments['--train-limit']) if arguments['--train-limit'] is not None else None
+    valid_limit = int(arguments['--valid-limit']) if arguments['--valid-limit'] is not None else None
+
     main(arguments['<data_dir>'],
          arguments['<plane>'],
          int(arguments['<epochs>']),
          float(arguments['--lr']),
          float(arguments['--weight-decay']),
-         arguments['--device'])
+         arguments['--device'],
+         train_limit,
+         valid_limit)

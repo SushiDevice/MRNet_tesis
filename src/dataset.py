@@ -12,8 +12,10 @@ from utils import preprocess_data
 
 
 class MRNetDataset(Dataset):
-    def __init__(self, dataset_dir, labels_path, plane, transform=None, device=None):
+    def __init__(self, dataset_dir, labels_path, plane, transform=None, device=None, max_cases=None):
         self.case_paths = sorted(glob(f'{dataset_dir}/{plane}/**.npy'))
+        if max_cases is not None:
+            self.case_paths = self.case_paths[:int(max_cases)]
         self.labels_df = pd.read_csv(labels_path)
         self.transform = transform
         self.window = 7
@@ -36,7 +38,7 @@ class MRNetDataset(Dataset):
         return (series, labels)
 
 
-def make_dataset(data_dir, dataset_type, plane, device=None):
+def make_dataset(data_dir, dataset_type, plane, device=None, max_cases=None):
     if device is None:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -58,6 +60,6 @@ def make_dataset(data_dir, dataset_type, plane, device=None):
     else:
         raise ValueError('Dataset needs to be train or valid.')
 
-    dataset = MRNetDataset(dataset_dir, labels_path, plane, transform=transform, device=device)
+    dataset = MRNetDataset(dataset_dir, labels_path, plane, transform=transform, device=device, max_cases=max_cases)
 
     return dataset
