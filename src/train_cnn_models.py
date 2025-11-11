@@ -32,6 +32,7 @@ from datetime import datetime
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import warnings
 
 from data_loader import make_data_loader
 from model import MRNet
@@ -61,17 +62,48 @@ def calculate_weights(data_dir, dataset_type, device):
 def make_adam_optimizer(model, lr, weight_decay):
     return optim.Adam(model.parameters(), lr, weight_decay=weight_decay)
 
+class _VerboseOnChangeWrapper:
+    def __init__(self, scheduler, optimizer, enable_verbose: bool):
+        self.scheduler = scheduler
+        self.optimizer = optimizer
+        self.enable_verbose = enable_verbose
+        self._prev_lrs = [g['lr'] for g in optimizer.param_groups]
 
-def make_lr_scheduler(optimizer,
-                      mode='min',
-                      factor=0.3,
-                      patience=1,
-                      verbose=False):
-    return optim.lr_scheduler.ReduceLROnPlateau(optimizer,
-                                                mode=mode,
-                                                factor=factor,
-                                                patience=patience,
-                                                verbose=verbose)
+    def step(self, metrics=None, epoch=None):
+        # Call underlying scheduler
+        if epoch is None:
+            self.scheduler.step(metrics)
+        else:
+            self.scheduler.step(metrics, epoch=epoch)
+
+        # Compare LRs and print if changed
+        new_lrs = [g['lr'] for g in self.optimizer.param_groups]
+        if self.enable_verbose and new_lrs != self._prev_lrs:
+            print(f"ReduceLROnPlateau: reducing learning rate {self._prev_lrs} -> {new_lrs} (metric={metrics})")
+        self._prev_lrs = new_lrs
+
+    # Proxy attributes/methods you may need
+    def state_dict(self):
+        return self.scheduler.state_dict()
+
+    def load_state_dict(self, state):
+        return self.scheduler.load_state_dict(state)
+
+
+def make_lr_scheduler(optimizer, mode='min', factor=0.3, patience=1, verbose=False):
+    try:
+        return optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode=mode, factor=factor, patience=patience, verbose=verbose
+        )
+    except TypeError:
+        warnings.warn(
+            'ReduceLROnPlateau does not accept `verbose` in this PyTorch version; emulating verbose output.',
+            RuntimeWarning
+        )
+        sched = optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode=mode, factor=factor, patience=patience
+        )
+        return _VerboseOnChangeWrapper(sched, optimizer, enable_verbose=verbose)
 
 
 def batch_forward_backprop(models, inputs, labels, criterions, optimizers):
