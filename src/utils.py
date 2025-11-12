@@ -14,12 +14,19 @@ def preprocess_data(case_path, transform=None):
     series =np.load(case_path).astype(np.float32)
     series = torch.tensor(np.stack((series,)*3, axis=1))
 
-    if transform is not None:
-        for i, slice in enumerate(series.split(1)):
-            series[i] = transform(slice.squeeze())
-
+    # Scale intensities per-case to [0, MAX_PIXEL_VAL] before any PIL conversion
     series = (series - series.min()) / (series.max() - series.min()) * MAX_PIXEL_VAL
-    series = (series - MEAN) / STD
+
+    if transform is not None:
+        transformed_series = []
+        for slice in series.split(1):
+            transformed_series.append(transform(slice.squeeze()))
+        series = torch.stack(transformed_series)
+        # When using model-specific transforms (e.g., timm), they include normalization
+        # so we skip additional dataset-level normalization here.
+    else:
+        # Legacy normalization path
+        series = (series - MEAN) / STD
 
     return series
 

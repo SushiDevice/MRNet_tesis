@@ -3,20 +3,26 @@
 import torch
 import torch.nn as nn
 from torchvision import models
+import timm
 
 
 class MRNet(nn.Module):
     def __init__(self):
         super().__init__()
-        self.alexnet = models.alexnet(pretrained=True).features
-        self.fc = nn.Linear(256, 1)
+        # Use EfficientNetV2-M backbone to produce global pooled embeddings
+        self.backbone = timm.create_model(
+            'efficientnetv2_rw_m.agc_in1k',
+            pretrained=True,
+            num_classes=0,
+            global_pool='avg'
+        )
+        self.fc = nn.Linear(self.backbone.num_features, 1)
 
-        self.avg_pool = nn.AvgPool2d(kernel_size=7, stride=None, padding=0)
         self.dropout = nn.Dropout(p=0.5)
 
     @property
     def features(self):
-        return self.alexnet
+        return self.backbone
 
     @property
     def classifier(self):
@@ -26,12 +32,14 @@ class MRNet(nn.Module):
         batch_out = torch.tensor([]).to(batch.device)
 
         for series in batch:
-            out = torch.tensor([]).to(batch.device)
+            # Collect per-slice embeddings
+            embeddings = torch.tensor([]).to(batch.device)
             for image in series:
-                out = torch.cat((out, self.features(image.unsqueeze(0))), 0)
+                emb = self.features(image.unsqueeze(0)).squeeze(0)
+                embeddings = torch.cat((embeddings, emb.unsqueeze(0)), 0)
 
-            out = self.avg_pool(out).squeeze()
-            out = out.max(dim=0, keepdim=True)[0].squeeze()
+            # Temporal max-pooling across slices
+            out = embeddings.max(dim=0, keepdim=True)[0].squeeze()
 
             out = self.classifier(self.dropout(out))
 
