@@ -38,21 +38,24 @@ class MRNetDataset(Dataset):
         return (series, labels)
 
 
-def make_dataset(data_dir, dataset_type, plane, device=None, max_cases=None):
+def make_dataset(data_dir, dataset_type, plane, device=None, max_cases=None, transform_type=None):
     if device is None:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     dataset_dir = f'{data_dir}/{dataset_type}'
     labels_path = f'{data_dir}/{dataset_type}_labels.csv'
 
-    if dataset_type == 'train':
+    # Allow overriding transform type independently from dataset_type (useful for CV folds)
+    _transform_key = transform_type if transform_type is not None else dataset_type
+
+    if _transform_key == 'train':
         transform = transforms.Compose([
             transforms.ToPILImage(),
             transforms.RandomHorizontalFlip(),
             transforms.RandomAffine(25, translate=(0.1, 0.1)),
             transforms.ToTensor()
         ])
-    elif dataset_type == 'valid':
+    elif _transform_key == 'valid':
         transform = transforms.Compose([
             transforms.ToPILImage(),
             transforms.ToTensor()

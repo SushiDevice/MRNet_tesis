@@ -129,6 +129,8 @@ Training options:
   --weight-decay=<wd>   Weight decay for nn.optim.Adam optimizer [default: 0.01]
   --device=<device>     Device to run code ('cpu' or 'cuda') - if not provided,
                         it will be set to the value returned by torch.cuda.is_available()
+  --kfolds=<k>          Optional K-Folds for CNN training (>=2 enables CV on train set)
+  --folds-file=<csv>    Optional CSV with columns 'case,fold' to share folds across planes
 ```
 
 To train CNNs, run:
@@ -150,6 +152,44 @@ Min valid loss for meniscus, saving the checkpoint...
 === Epoch 2/50 ===
 ...
 ```
+
+Optional: K-Folds cross validation for CNNs
+
+```terminal
+$ python -u src/train_cnn_models.py MRNet-v1.0 axial 10 --kfolds=5
+Parsing arguments...
+Creating datasets for K-Folds...
+K-Folds training enabled: k=5
+=== Fold 1/5 ===
+Training a model using axial series...
+Checkpoints and losses will be save to ./models/2025-11-17_12-00/fold_1
+...
+=== Fold 5/5 ===
+Completed K-Folds training.
+```
+
+Notes:
+- K-Folds se aplica solo sobre el split `train` del MRNet original. El split `valid` queda intacto para evaluación final.
+- Cada fold guarda sus checkpoints y pérdidas en `./models/<timestamp>/fold_<k>/`.
+- Las transformaciones de data augmentation se usan en el subconjunto de entrenamiento del fold, y transformaciones de validación en el subconjunto de validación del fold.
+
+Shared folds entre planos (recomendado)
+
+Para garantizar que axial, coronal y sagittal usen exactamente los mismos casos en cada fold, genera un CSV `case,fold` una sola vez y pásalo a los tres entrenamientos:
+
+```terminal
+$ python -u scripts/make_train_folds.py MRNet-v1.0 --k=5 --seed=42 --output=folds_train.csv
+Folds CSV escrito: folds_train.csv (K=5, seed=42)
+
+# Entrenar por plano usando el mismo folds file:
+$ python -u src/train_cnn_models.py MRNet-v1.0 axial 10 --folds-file=folds_train.csv
+$ python -u src/train_cnn_models.py MRNet-v1.0 coronal 10 --folds-file=folds_train.csv
+$ python -u src/train_cnn_models.py MRNet-v1.0 sagittal 10 --folds-file=folds_train.csv
+```
+
+Notas:
+- Si `--folds-file` está presente, se ignora `--kfolds` (el número de folds se toma del CSV).
+- El CSV debe tener cabecera `case,fold` y enumerar todos los `case` de `train`.
 
 It create a directory for each experiment, named with a timestamp `{datetime.now():%Y-%m-%d_%H-%M}`, e.g. `2019-06-25_12-37` where all the output will be stored.
 
@@ -372,3 +412,27 @@ The hidden test set is _not publically available_ and is used for scoring models
 #### 🏳️‍🌈 Co-founder of [Women Driven Development](https://womendrivendev.org/)
 
 [Github](https://github.com/MisaOgura) | [Medium](https://medium.com/@misaogura) | [twitter](https://twitter.com/misa_ogura) | [LinkedIn](https://www.linkedin.com/in/misaogura/)
+
+
+#Resumen: K-Folds en el pipeline
+¿Qué habilita?
+Dos modos:
+--kfolds=<k>: crea K folds internos sobre train (por plano).
+--folds-file=<csv>: usa un CSV case,fold compartido por los 3 planos (alineación perfecta entre planos).
+¿Qué cambia en el entrenamiento?
+Por fold:
+Entrena con K−1 partes (augmentación) y valida con 1 (sin augmentación).
+Guarda checkpoints y pérdidas en models/<timestamp>/fold_<id>/.
+Por plano:
+Se entrena axial, coronal y sagital por separado.
+Con --folds-file, los 3 planos usan los mismos casos por fold.
+¿Qué no cambia?
+valid original: no se toca; sigue como hold-out final.
+Scripts de predicción/evaluación: se usan igual; tú apuntas a los checkpoints que prefieras (p. ej., del mejor fold).
+¿Cómo se integra con la LR (combinación de vistas)?
+Opción rápida: elige un fold (p. ej., fold 1) y entrena la LR con esos 9 CNN (3 diagnósticos × 3 planos).
+Opción rigurosa: usa K folds para generar OOF y entrenar una LR única; en inferencia, promedia las K CNN por plano y pasa por la LR. (Este paso OOF no está automatizado aún).
+Detalles prácticos
+Épocas: el valor <epochs> se aplica en cada fold.
+Salida: un directorio por fold; si quieres una raíz común para los 3 planos, podemos agregar una opción de nombre de experimento.
+CSV de folds: se genera con scripts/make_train_folds.py y garantiza que los 3 planos validen exactamente sobre los mismos casos en cada fold.

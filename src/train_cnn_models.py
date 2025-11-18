@@ -21,9 +21,12 @@ Training options:
                         it will be set to the value returned by torch.cuda.is_available()
   --train-limit=<n>     Limit number of training exams (use all if omitted)
   --valid-limit=<n>     Limit number of validation exams (use all if omitted)
+  --kfolds=<k>          Optional K-Folds for CNN training (>=2 enables CV on train set)
+  --folds-file=<csv>    Optional CSV with columns 'case,fold' to share folds across planes
 """
 
 import sys
+import os
 import numpy as np
 import pandas as pd
 from docopt import docopt
@@ -34,11 +37,13 @@ import torch.nn as nn
 import torch.optim as optim
 
 from data_loader import make_data_loader
+from dataset import make_dataset
 from model import MRNet
 from utils import create_output_dir, \
                   print_stats,       \
                   save_losses,       \
                   save_checkpoint
+from sklearn.model_selection import KFold
 
 
 def calculate_weights(data_dir, dataset_type, device):
@@ -67,11 +72,11 @@ def make_lr_scheduler(optimizer,
                       factor=0.3,
                       patience=1,
                       verbose=False):
+    # Nota: algunas versiones de PyTorch no soportan el parámetro 'verbose'
     return optim.lr_scheduler.ReduceLROnPlateau(optimizer,
                                                 mode=mode,
                                                 factor=factor,
-                                                patience=patience,
-                                                verbose=verbose)
+                                                patience=patience)
 
 
 def batch_forward_backprop(models, inputs, labels, criterions, optimizers):
@@ -113,19 +118,10 @@ def update_lr_schedulers(lr_schedulers, batch_valid_losses):
         scheduler.step(v_loss)
 
 
-def main(data_dir, plane, epochs, lr, weight_decay, device=None, train_limit=None, valid_limit=None):
+def _train_one_run(data_dir, plane, epochs, lr, weight_decay, device, train_loader, valid_loader, out_dir):
     diagnoses = ['abnormal', 'acl', 'meniscus']
 
-    exp = f'{datetime.now():%Y-%m-%d_%H-%M}'
-    out_dir, losses_path = create_output_dir(exp, plane)
-
-    if device is None:
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-    print('Creating data loaders...')
-
-    train_loader = make_data_loader(data_dir, 'train', plane, device, shuffle=True, max_cases=train_limit)
-    valid_loader = make_data_loader(data_dir, 'valid', plane, device, max_cases=valid_limit)
+    out_dir, losses_path = create_output_dir(out_dir, plane)
 
     print(f'Creating models...')
 
@@ -194,6 +190,95 @@ def main(data_dir, plane, epochs, lr, weight_decay, device=None, train_limit=Non
                 min_valid_losses[i] = batch_v_loss
 
 
+def _case_ids_from_dataset(dataset):
+    case_ids = []
+    for path in dataset.case_paths:
+        base = os.path.splitext(os.path.basename(path))[0]
+        try:
+            case_ids.append(int(base))
+        except ValueError:
+            # try zero-padded names
+            case_ids.append(int(base.lstrip('0') or '0'))
+    return case_ids
+
+
+def main(data_dir, plane, epochs, lr, weight_decay, device=None, train_limit=None, valid_limit=None, kfolds=None, folds_file=None):
+    if device is None:
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    # Folds-file branch: enforce same folds across planes using provided mapping
+    if folds_file is not None:
+        print('Loading shared folds mapping from CSV...')
+        folds_df = pd.read_csv(folds_file)
+        if 'case' not in folds_df.columns or 'fold' not in folds_df.columns:
+            raise ValueError("--folds-file debe contener columnas 'case' y 'fold'")
+        folds_df['case'] = folds_df['case'].astype(int)
+        folds_df['fold'] = folds_df['fold'].astype(int)
+
+        base_train_dataset = make_dataset(data_dir, 'train', plane, device=device, max_cases=train_limit, transform_type='train')
+        # map dataset indices to case ids
+        case_ids = _case_ids_from_dataset(base_train_dataset)
+        case_to_idx = {cid: idx for idx, cid in enumerate(case_ids)}
+
+        # derive folds present in mapping (sorted)
+        fold_ids = sorted(folds_df['fold'].unique().tolist())
+        exp = f'{datetime.now():%Y-%m-%d_%H-%M}'
+        print(f'Using shared folds file with {len(fold_ids)} folds: {fold_ids}')
+
+        for fold_idx in fold_ids:
+            val_cases = folds_df.loc[folds_df['fold'] == fold_idx, 'case'].astype(int).tolist()
+            # filter to cases that exist in this plane's dataset
+            val_idx = [case_to_idx[c] for c in val_cases if c in case_to_idx]
+            train_idx = [i for i in range(len(case_ids)) if i not in set(val_idx)]
+            print(f'=== Fold {fold_idx}/{fold_ids[-1]} === (train={len(train_idx)}, valid={len(val_idx)})')
+
+            train_loader = make_data_loader(
+                data_dir, 'train', plane, device, shuffle=True, indices=train_idx, transform_type='train'
+            )
+            fold_valid_loader = make_data_loader(
+                data_dir, 'train', plane, device, shuffle=False, indices=val_idx, transform_type='valid'
+            )
+            out_dir = f'{exp}/fold_{fold_idx}'
+            _train_one_run(data_dir, plane, epochs, lr, weight_decay, device, train_loader, fold_valid_loader, out_dir)
+
+        print('Completed shared-folds training.')
+        return
+
+    # K-Folds branch: perform CV on the train split only
+    if kfolds is not None and kfolds >= 2:
+        print('Creating datasets for K-Folds...')
+        base_train_dataset = make_dataset(data_dir, 'train', plane, device=device, max_cases=train_limit, transform_type='train')
+        n_samples = len(base_train_dataset)
+        indices = np.arange(n_samples)
+
+        exp = f'{datetime.now():%Y-%m-%d_%H-%M}'
+        print(f'K-Folds training enabled: k={kfolds}')
+
+        kf = KFold(n_splits=kfolds, shuffle=True, random_state=42)
+        for fold_idx, (train_idx, val_idx) in enumerate(kf.split(indices), start=1):
+            print(f'=== Fold {fold_idx}/{kfolds} ===')
+            train_loader = make_data_loader(
+                data_dir, 'train', plane, device, shuffle=True, indices=train_idx, transform_type='train'
+            )
+            fold_valid_loader = make_data_loader(
+                data_dir, 'train', plane, device, shuffle=False, indices=val_idx, transform_type='valid'
+            )
+            out_dir = f'{exp}/fold_{fold_idx}'
+            _train_one_run(data_dir, plane, epochs, lr, weight_decay, device, train_loader, fold_valid_loader, out_dir)
+
+        print('Completed K-Folds training.')
+        return
+
+    # Default single-run training
+    print('Creating data loaders...')
+
+    exp = f'{datetime.now():%Y-%m-%d_%H-%M}'
+    train_loader = make_data_loader(data_dir, 'train', plane, device, shuffle=True, max_cases=train_limit)
+    valid_loader = make_data_loader(data_dir, 'valid', plane, device, max_cases=valid_limit)
+    out_dir = exp
+    _train_one_run(data_dir, plane, epochs, lr, weight_decay, device, train_loader, valid_loader, out_dir)
+
+
 if __name__ == '__main__':
     arguments = docopt(__doc__)
 
@@ -201,6 +286,8 @@ if __name__ == '__main__':
 
     train_limit = int(arguments['--train-limit']) if arguments['--train-limit'] is not None else None
     valid_limit = int(arguments['--valid-limit']) if arguments['--valid-limit'] is not None else None
+    kfolds = int(arguments['--kfolds']) if arguments['--kfolds'] is not None else None
+    folds_file = arguments['--folds-file']
 
     main(arguments['<data_dir>'],
          arguments['<plane>'],
@@ -209,4 +296,6 @@ if __name__ == '__main__':
          float(arguments['--weight-decay']),
          arguments['--device'],
          train_limit,
-         valid_limit)
+         valid_limit,
+         kfolds,
+         folds_file)
