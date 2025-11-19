@@ -70,8 +70,8 @@ def make_lr_scheduler(optimizer,
     return optim.lr_scheduler.ReduceLROnPlateau(optimizer,
                                                 mode=mode,
                                                 factor=factor,
-                                                patience=patience,
-                                                verbose=verbose)
+                                                patience=patience)
+                                                #verbose=verbose)
 
 
 def batch_forward_backprop(models, inputs, labels, criterions, optimizers):
