@@ -44,7 +44,8 @@ from utils import create_output_dir, \
 def calculate_weights(data_dir, dataset_type, device):
     diagnoses = ['abnormal', 'acl', 'meniscus']
 
-    labels_path = f'{data_dir}/{dataset_type}_split1_labels.csv'  #Linea editada para usar el csv correcto de labels
+    labels_path = f'{data_dir}/{dataset_type}_labels.csv'  
+    print(labels_path)
     labels_df = pd.read_csv(labels_path)
 
     weights = []

@@ -45,7 +45,10 @@ def make_dataset(data_dir, dataset_type, plane, device=None, max_cases=None):
     dataset_dir = f'{data_dir}/{dataset_type}'
     labels_path = f'{data_dir}/{dataset_type}_labels.csv'
 
-    if dataset_type == 'train':
+    # Allow dataset_type values like 'train', 'train_split1', 'test_split1', etc.
+    # Treat any dataset_type that contains 'train' as training (apply augmentations),
+    # otherwise use validation-style transforms (no augmentation).
+    if 'train' in dataset_type:
         transform = transforms.Compose([
             transforms.ToPILImage(),
             transforms.RandomHorizontalFlip(),
@@ -59,7 +62,7 @@ def make_dataset(data_dir, dataset_type, plane, device=None, max_cases=None):
         ])
     else:
         raise ValueError('Dataset needs to be train or valid.')
-
+    
     dataset = MRNetDataset(dataset_dir, labels_path, plane, transform=transform, device=device, max_cases=max_cases)
 
     return dataset
