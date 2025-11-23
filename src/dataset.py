@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset
 from torchvision import transforms
-import timm
 
 from utils import preprocess_data
 
@@ -46,18 +45,24 @@ def make_dataset(data_dir, dataset_type, plane, device=None, max_cases=None):
     dataset_dir = f'{data_dir}/{dataset_type}'
     labels_path = f'{data_dir}/{dataset_type}_labels.csv'
 
-    # Build model-specific transforms to match EfficientNetV2-M expectations
-    if dataset_type not in ('train', 'valid'):
+    # Allow dataset_type values like 'train', 'train_split1', 'test_split1', etc.
+    # Treat any dataset_type that contains 'train' as training (apply augmentations),
+    # otherwise use validation-style transforms (no augmentation).
+    if 'train' in dataset_type:
+        transform = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomAffine(25, translate=(0.1, 0.1)),
+            transforms.ToTensor()
+        ])
+    elif dataset_type == 'valid':
+        transform = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.ToTensor()
+        ])
+    else:
         raise ValueError('Dataset needs to be train or valid.')
-    tmp_model = timm.create_model('efficientnetv2_rw_m.agc_in1k', pretrained=True, num_classes=0, global_pool='avg')
-    data_config = timm.data.resolve_model_data_config(tmp_model)
-    base_transform = timm.data.create_transform(**data_config, is_training=(dataset_type == 'train'))
-    # Ensure we can feed tensor slices by converting to PIL first
-    transform = transforms.Compose([
-        transforms.ToPILImage(),
-        base_transform
-    ])
-
+    
     dataset = MRNetDataset(dataset_dir, labels_path, plane, transform=transform, device=device, max_cases=max_cases)
 
     return dataset

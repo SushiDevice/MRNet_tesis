@@ -8,3 +8,5 @@ __pycache__
 *.csv
 *_paths.txt
 myenv
+src/lr_models_path.txt
+src/cnn_models_path.txt

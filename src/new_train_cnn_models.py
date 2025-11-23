@@ -44,7 +44,8 @@ from utils import create_output_dir, \
 def calculate_weights(data_dir, dataset_type, device):
     diagnoses = ['abnormal', 'acl', 'meniscus']
 
-    labels_path = f'{data_dir}/{dataset_type}_labels.csv'
+    labels_path = f'{data_dir}/{dataset_type}_labels.csv'  
+    print(labels_path)
     labels_df = pd.read_csv(labels_path)
 
     weights = []
@@ -123,8 +124,8 @@ def main(data_dir, plane, epochs, lr, weight_decay, device=None, train_limit=Non
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     print('Creating data loaders...')
-
-    train_loader = make_data_loader(data_dir, 'train', plane, device, shuffle=True, max_cases=train_limit)
+    #Linea siguiente fue editada para usar el nuevo split de train
+    train_loader = make_data_loader(data_dir, 'train_split1', plane, device, shuffle=True, max_cases=train_limit) 
     valid_loader = make_data_loader(data_dir, 'valid', plane, device, max_cases=valid_limit)
 
     print(f'Creating models...')
@@ -135,7 +136,7 @@ def main(data_dir, plane, epochs, lr, weight_decay, device=None, train_limit=Non
 
     # Calculate loss weights based on the prevalences in train set
 
-    pos_weights = calculate_weights(data_dir, 'train', device)
+    pos_weights = calculate_weights(data_dir, 'train_split1', device)
     criterions = [nn.BCEWithLogitsLoss(pos_weight=weight) \
                   for weight in pos_weights]
 

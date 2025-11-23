@@ -150,7 +150,10 @@ Min valid loss for meniscus, saving the checkpoint...
 === Epoch 2/50 ===
 ...
 ```
-
+Para entrenar CNNs con nuevo split de training, correr:
+```terminal
+$ python -u src/new_train_cnn_models.py MRNet-v1.0 axial 10
+```
 It create a directory for each experiment, named with a timestamp `{datetime.now():%Y-%m-%d_%H-%M}`, e.g. `2019-06-25_12-37` where all the output will be stored.
 
 A checkpoint `cnn_{plane}_{diagnosis}_{epoch:02d}.pt` is saved whenever the loweset validation loss is achieved for a particular diagnosis. The training and validation losses are also saved as `losses_{plane}.csv`.
@@ -190,6 +193,10 @@ Cross validation score for acl: 0.649
 Cross validation score for meniscus: 0.689
 Logistic regression models saved to path/to/models
 ```
+Para entrenar regresión logística con el nuevo split, correr:
+```terminal
+$ python -u src/new_train_lr_models.py MRNet-v1.0 path/to/models
+```
 
 Note that the code will look for the **best CNN checkpoints** saved in the `models_dir` by sorting each model and taking the *last one*. This is because in `src/train_cnn_models.py`, checkpoints are saved in a format `cnn_{plane}_{diagnosis}_{epoch:02d}.pt` every time the minimum validation loss is achieved. Hence the one with the **largest epoch value** per model is considered the best.
 
@@ -200,6 +207,11 @@ You will now have `lr_{diagnosis}.pkl` models saved to `path/to/models` director
 We have trained 9 CNNs and 3 logistic regrssion models. Let's evaluate them.
 
 #### 5.1. Obtain predictions
+
+Luego de haber entrenado los modelos, correr el siguiente comando para tener los paths del nuevo split:
+```terminal
+python scripts/new_make_all_test_paths.py MRNet-v1.0 out --split=test_split1
+```
 
 First we need to obtain model predictions on the validation dataset.
 
@@ -271,6 +283,10 @@ The output should look like this (mock data):
 3.527864673292197550e-01,2.275642573873807861e-01,4.486585856423670055e-02
 4.285206463344938543e-02,1.557965692434650634e-02,2.385414339529156116e-02
 4.834032069244934005e-01,4.263092724193431882e-02,3.172960607334367467e-01
+```
+Si queremos hacer predicciones sobre el nuevo set de testeo, correr:
+```terminal
+python src/predict.py out/test_split1_paths.csv out/
 ```
 
 #### 5.2. Calculate AUC scores
