@@ -2,14 +2,14 @@
 
 import torch
 import torch.nn as nn
-from torchvision.models import convnext_base, ConvNeXt_Base_Weights
+from torchvision.models import convnext_tiny, ConvNeXt_Tiny_Weights
 
 
 class MRNet(nn.Module):
     def __init__(self):
         super().__init__()
-        weights = ConvNeXt_Base_Weights.IMAGENET1K_V1
-        backbone = convnext_base(weights=weights)
+        weights = ConvNeXt_Tiny_Weights.IMAGENET1K_V1
+        backbone = convnext_tiny(weights=weights)
         self.feature_extractor = nn.Sequential(
             backbone.features,
             backbone.avgpool,
