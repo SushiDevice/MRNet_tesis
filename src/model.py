@@ -8,15 +8,16 @@ from torchvision import models
 class MRNet(nn.Module):
     def __init__(self):
         super().__init__()
-        self.alexnet = models.alexnet(pretrained=True).features
-        self.fc = nn.Linear(256, 1)
+        self.efficientnet = models.efficientnet_b3(weights='IMAGENET1K_V1')
+        # Remove the classification head to use as a feature extractor
+        self.efficientnet.classifier = nn.Identity()
+        self.fc = nn.Linear(1536, 1)
 
-        self.avg_pool = nn.AvgPool2d(kernel_size=7, stride=None, padding=0)
         self.dropout = nn.Dropout(p=0.5)
 
     @property
     def features(self):
-        return self.alexnet
+        return self.efficientnet
 
     @property
     def classifier(self):
@@ -28,9 +29,15 @@ class MRNet(nn.Module):
         for series in batch:
             out = torch.tensor([]).to(batch.device)
             for image in series:
-                out = torch.cat((out, self.features(image.unsqueeze(0))), 0)
+                # EfficientNet_B3 outputs (1, 1536) after adaptive avg pooling
+                features = self.features(image.unsqueeze(0))
+                # Flatten to 1D if needed
+                if features.dim() > 2:
+                    features = features.view(features.size(0), -1)
+                out = torch.cat((out, features), 0)
 
-            out = self.avg_pool(out).squeeze()
+            # out shape is (num_images, 1536)
+            # Take max across all images in the series
             out = out.max(dim=0, keepdim=True)[0].squeeze()
 
             out = self.classifier(self.dropout(out))
