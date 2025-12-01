@@ -95,15 +95,19 @@ def main(data_paths_csv, models_dir, output_dir):
     # Store all predictions
     all_predictions = {key: [] for key in models.keys()}
 
-    with torch.no_grad():
-        for npy_path in tqdm(npy_paths):
-            series = preprocess_data(npy_path, transform)
-            data = series.unsqueeze(0).to(device)
-
-            # Make prediction with each model
-            for key, model in models.items():
+    # Generate predictions for each model on its corresponding plane
+    for (task, plane), model in models.items():
+        print(f'\nProcessing {task} model for {plane} plane...')
+        
+        # Filter paths to only include this plane
+        plane_paths = [p for p in npy_paths if f'/{plane}/' in p]
+        
+        with torch.no_grad():
+            for npy_path in tqdm(plane_paths):
+                series = preprocess_data(npy_path, transform)
+                data = series.unsqueeze(0).to(device)
                 pred = model(data).detach().cpu().item()
-                all_predictions[key].append(pred)
+                all_predictions[(task, plane)].append(pred)
 
     # Write predictions to separate CSV files for each model
     print('\nSaving predictions...')

@@ -92,36 +92,13 @@ def evaluate_model(predictions, labels, loss_weight=1.0):
 def main(predictions_dir, data_paths_csv, labels_csv, loss_weight=1.0):
     print('Evaluating all models...\n')
 
-    # Load and extract case IDs from paths (matching original evaluate.py logic)
+    # Load data paths
     print(f'Loading data paths from {data_paths_csv}...')
     all_paths = []
     with open(data_paths_csv, 'r') as f:
         all_paths = [line.strip() for line in f.readlines()]
     
     print(f'Total sample paths: {len(all_paths)}')
-    
-    # Extract unique cases (assuming 3 samples per case - one for each plane)
-    old_case = None
-    cases = []
-    case_indices = []  # Track which samples belong to each case
-    current_case_samples = []
-    
-    for idx, path in enumerate(all_paths):
-        case = os.path.splitext(os.path.basename(path))[0]
-        if case != old_case:
-            if current_case_samples:
-                case_indices.append(current_case_samples)
-            current_case_samples = [idx]
-            cases.append(case)
-            old_case = case
-        else:
-            current_case_samples.append(idx)
-    
-    if current_case_samples:
-        case_indices.append(current_case_samples)
-
-    print(f'Found {len(cases)} unique cases')
-    print(f'Samples per case: {len(case_indices[0]) if case_indices else 0}')
 
     # Load labels
     print(f'Loading labels from {labels_csv}...')
@@ -162,9 +139,9 @@ def main(predictions_dir, data_paths_csv, labels_csv, loss_weight=1.0):
             print(f'Warning: Predictions for {task} ({plane}) not found')
             continue
 
-        # Load predictions (all samples)
+        # Load predictions for this model's plane
         preds_df = pd.read_csv(pred_files[key], header=None)
-        all_predictions = preds_df.values.flatten().astype(np.float32)
+        plane_predictions = preds_df.values.flatten().astype(np.float32)
 
         # Get labels for this task
         label_column = task
@@ -172,14 +149,17 @@ def main(predictions_dir, data_paths_csv, labels_csv, loss_weight=1.0):
             print(f'Warning: Label column "{label_column}" not found in {labels_csv}')
             continue
 
-        # Aggregate predictions by case (take max prediction across samples for each case)
-        case_predictions = []
-        for indices in case_indices:
-            case_preds = [all_predictions[i] for i in indices if i < len(all_predictions)]
-            # Take the maximum prediction for this case (following MRNet paper approach)
-            case_predictions.append(np.max(case_preds) if case_preds else 0.0)
+        # Filter paths to get only this plane's indices
+        plane_paths = [p for p in all_paths if f'/{plane}/' in p]
+        
+        # Extract cases from plane paths
+        cases = []
+        for path in plane_paths:
+            # Extract case number from path: .../XXXX.npy
+            case_num = os.path.basename(path).replace('.npy', '')
+            cases.append(case_num)
 
-        # Extract labels in the same order as cases
+        # Get labels for these cases
         labels_list = []
         for case in cases:
             case_row = labels_df[labels_df.case == int(case)]
@@ -188,7 +168,7 @@ def main(predictions_dir, data_paths_csv, labels_csv, loss_weight=1.0):
             else:
                 print(f'Warning: Case {case} not found in labels')
 
-        predictions = np.array(case_predictions, dtype=np.float32)
+        predictions = np.array(plane_predictions, dtype=np.float32)
         labels = np.array(labels_list, dtype=np.float32)
 
         # Verify lengths match
