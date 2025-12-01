@@ -8,15 +8,16 @@ from torchvision import models
 class MRNet(nn.Module):
     def __init__(self):
         super().__init__()
-        self.alexnet = models.alexnet(pretrained=True).features
-        self.fc = nn.Linear(256, 1)
+        regnet = models.regnet_y_1_6gf(weights=models.RegNet_Y_1_6GF_Weights.IMAGENET1K_V1)
+        self.regnet = nn.Sequential(regnet.stem, regnet.trunk_output)
+        self.fc = nn.Linear(888, 1)
 
         self.avg_pool = nn.AvgPool2d(kernel_size=7, stride=None, padding=0)
         self.dropout = nn.Dropout(p=0.5)
 
     @property
     def features(self):
-        return self.alexnet
+        return self.regnet
 
     @property
     def classifier(self):
