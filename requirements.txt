@@ -3,5 +3,7 @@ joblib==1.2.0
 pandas==2.3.3
 scikit-learn==1.6
 tqdm==4.32.1
+--index-url https://download.pytorch.org/whl/cu128
 torch==2.7.0
-cuda==12.8
+torchvision==0.22.0
+torchaudio==2.7.0
