@@ -6,7 +6,7 @@ from torchvision import models
 
 
 class MRNet(nn.Module):
-    """MRNet model using EfficientNetB0 backbone with fine-tuning support."""
+    """MRNet model using EfficientNetB0 backbone with transfer learning support."""
     def __init__(self, freeze_backbone=True, unfreeze_blocks=None):
         """
         Initialize EfficientNetB0-based MRNet.
@@ -14,24 +14,25 @@ class MRNet(nn.Module):
         Args:
             freeze_backbone: If True, freeze all backbone parameters initially
             unfreeze_blocks: List of block indices to unfreeze (0-6 for EfficientNetB0)
-                           If None and freeze_backbone=False, all blocks are trainable
         """
         super().__init__()
         
         # Load EfficientNetB0 with ImageNet1K V1 pretrained weights
         weights = models.EfficientNet_B0_Weights.IMAGENET1K_V1
-        self.backbone = models.efficientnet_b0(weights=weights)
+        backbone = models.efficientnet_b0(weights=weights)
         
-        # Store original classifier for reference
-        in_features = self.backbone.classifier[1].in_features
+        # Use only the features (not the classifier)
+        self.features = backbone.features  # Returns features without classifier head
         
-        # Replace classifier with a new one for binary classification
-        self.backbone.classifier = nn.Sequential(
-            nn.Dropout(p=0.3, inplace=True),
-            nn.Linear(in_features, 1)
-        )
+        # Get the number of output channels from EfficientNetB0
+        # EfficientNetB0 outputs 1280 channels
+        self.feature_dim = 1280
         
-        self.avg_pool = nn.AdaptiveAvgPool2d(output_size=1)
+        # Simple linear classifier on top
+        self.classifier = nn.Linear(self.feature_dim, 1)
+        
+        # Pooling and dropout match the original AlexNet design
+        self.avg_pool = nn.AvgPool2d(kernel_size=7, stride=None, padding=0)
         self.dropout = nn.Dropout(p=0.5)
         
         # Apply initial freezing if requested
@@ -45,7 +46,7 @@ class MRNet(nn.Module):
     def freeze_backbone(self, freeze_batchnorm=True):
         """Freeze backbone feature extraction, but keep classifier trainable."""
         # Freeze features but not the classifier
-        for name, param in self.backbone.features.named_parameters():
+        for name, param in self.features.named_parameters():
             if freeze_batchnorm and 'bn' in name.lower():
                 # Keep BatchNorm trainable
                 param.requires_grad = True
@@ -53,13 +54,12 @@ class MRNet(nn.Module):
                 param.requires_grad = False
         
         # Always keep classifier trainable
-        for param in self.backbone.classifier.parameters():
+        for param in self.classifier.parameters():
             param.requires_grad = True
     
     def unfreeze_blocks(self, block_indices, freeze_batchnorm=True):
         """
         Unfreeze specific blocks (0-6 for EfficientNetB0).
-        BatchNorm layers are kept frozen unless specified otherwise.
         
         Args:
             block_indices: List of block indices to unfreeze
@@ -69,12 +69,10 @@ class MRNet(nn.Module):
         self.freeze_backbone(freeze_batchnorm=freeze_batchnorm)
         
         # Then unfreeze specified blocks
-        if hasattr(self.backbone, 'features'):
-            features = self.backbone.features
-            for block_idx in block_indices:
-                if block_idx < len(features):
-                    for param in features[block_idx].parameters():
-                        param.requires_grad = True
+        for block_idx in block_indices:
+            if block_idx < len(self.features):
+                for param in self.features[block_idx].parameters():
+                    param.requires_grad = True
     
     def unfreeze_last_n_blocks(self, n_blocks, freeze_batchnorm=True):
         """
@@ -84,42 +82,36 @@ class MRNet(nn.Module):
             n_blocks: Number of blocks to unfreeze from the end
             freeze_batchnorm: If True, keep BatchNorm layers frozen
         """
-        if hasattr(self.backbone, 'features'):
-            total_blocks = len(self.backbone.features)
-            block_indices = list(range(max(0, total_blocks - n_blocks), total_blocks))
-            self.unfreeze_blocks(block_indices, freeze_batchnorm=freeze_batchnorm)
+        total_blocks = len(self.features)
+        block_indices = list(range(max(0, total_blocks - n_blocks), total_blocks))
+        self.unfreeze_blocks(block_indices, freeze_batchnorm=freeze_batchnorm)
     
     def unfreeze_all(self, freeze_batchnorm=True):
-        """
-        Unfreeze all layers except BatchNorm (if freeze_batchnorm=True).
-        """
-        for name, param in self.backbone.named_parameters():
+        """Unfreeze all layers except BatchNorm (if freeze_batchnorm=True)."""
+        for name, param in self.features.named_parameters():
             if freeze_batchnorm and 'bn' in name.lower():
                 param.requires_grad = False
             else:
                 param.requires_grad = True
+        
+        for param in self.classifier.parameters():
+            param.requires_grad = True
     
     def get_trainable_params_count(self):
         """Return count of trainable parameters."""
-        return sum(p.numel() for p in self.backbone.parameters() if p.requires_grad)
+        backbone_trainable = sum(p.numel() for p in self.features.parameters() if p.requires_grad)
+        classifier_trainable = sum(p.numel() for p in self.classifier.parameters() if p.requires_grad)
+        return backbone_trainable + classifier_trainable
     
     def get_total_params_count(self):
         """Return total count of parameters."""
-        return sum(p.numel() for p in self.backbone.parameters())
-    
-    @property
-    def features(self):
-        """Returns the backbone for feature extraction."""
-        return self.backbone
-    
-    @property
-    def classifier(self):
-        """Returns the classifier layer."""
-        return self.backbone.classifier
+        backbone_total = sum(p.numel() for p in self.features.parameters())
+        classifier_total = sum(p.numel() for p in self.classifier.parameters())
+        return backbone_total + classifier_total
 
     def forward(self, batch):
         """
-        Forward pass for a batch of MRI series.
+        Forward pass for a batch of MRI series (matches original AlexNet design).
         
         Args:
             batch: Tensor of shape (batch_size, num_images, channels, height, width)
@@ -127,29 +119,24 @@ class MRNet(nn.Module):
         Returns:
             Predictions of shape (batch_size,)
         """
-        batch_out = []
+        batch_out = torch.tensor([], device=batch.device)
 
         for series in batch:
-            out_list = []
+            out = torch.tensor([], device=batch.device)
             
             for image in series:
-                # Get features from backbone
-                features = self.backbone.features(image.unsqueeze(0))
-                out_list.append(features)
+                # Extract features from backbone
+                features = self.features(image.unsqueeze(0))  # [1, 1280, H, W]
+                out = torch.cat((out, features), 0)
             
-            # Concatenate features from all images in the series
-            if out_list:
-                out = torch.cat(out_list, 0)  # (num_images, num_features)
-                
-                # Aggregate features across images in the series
-                out = self.avg_pool(out).squeeze(dim=-1).squeeze(dim=-1)  # (num_images, num_features)
-                out = out.max(dim=0, keepdim=True)[0].squeeze()  # Max pooling across images
+            # Aggregate features across all images in the series
+            out = self.avg_pool(out).squeeze()  # [1280]
+            out = out.max(dim=0, keepdim=True)[0].squeeze()  # Max pooling across images [1280]
+            
+            # Classification
+            out = self.classifier(self.dropout(out))  # [1]
+            
+            batch_out = torch.cat((batch_out, out), 0)
 
-                # Classification
-                out = self.backbone.classifier(self.dropout(out.unsqueeze(0)))
-                batch_out.append(out)
+        return batch_out
 
-        if batch_out:
-            return torch.cat(batch_out, 0)
-        else:
-            return torch.tensor([], device=batch.device, dtype=torch.float32)
