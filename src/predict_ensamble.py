@@ -37,7 +37,7 @@ import pandas as pd
 import joblib
 from torchvision import transforms
 
-from model import MRNet, ConvNextTiny
+from model import MRNet, ConvNextTiny, ResNext50
 from utils import preprocess_data
 
 

@@ -25,11 +25,8 @@ import numpy as np
 from sklearn.linear_model import LogisticRegressionCV
 import joblib
 
-from model import MRNet, ConvNextTiny
+from model import MRNet, ConvNextTiny, ResNext50
 from data_loader import make_data_loader
-
-# ResNext50 will be added to model.py later
-# from model import ResNext50
 
 
 def main(data_dir, models_dir):
@@ -64,6 +61,17 @@ def main(data_dir, models_dir):
                 checkpoint = torch.load(checkpoint_path, map_location=device)
                 
                 model = ConvNextTiny().to(device)
+                model.load_state_dict(checkpoint['state_dict'])
+                models_per_condition.append(model)
+        
+        # Load ResNext50 models
+        for plane in planes:
+            checkpoint_pattern = glob(f'{models_dir}/resnext50_*{plane}*{condition}*.pt')
+            if checkpoint_pattern:
+                checkpoint_path = sorted(checkpoint_pattern)[-1]
+                checkpoint = torch.load(checkpoint_path, map_location=device)
+                
+                model = ResNext50().to(device)
                 model.load_state_dict(checkpoint['state_dict'])
                 models_per_condition.append(model)
 
