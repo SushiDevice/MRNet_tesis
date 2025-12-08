@@ -3,11 +3,11 @@
 Meniscal tear tasks, along with additional metrics (sensitivity, specificity, accuracy, loss).
 
 Usage:
-  evaluate_moremetrics.py <valid_paths_csv> <preds_csv> <valid_labels_csv> [--loss-weight=<w>]
+  evaluate_moremetrics.py <valid_paths_csv> <preds_csv> <valid_labels_csv> [--loss-weight=<w>] [--output-dir=<dir>]
   evaluate_moremetrics.py (-h | --help)
 
 General options:
-  -h --help          Show this screen.
+  -h --help            Show this screen.
 
 Arguments:
   <valid_paths_csv>    csv file listing paths to validation set, which needs to
@@ -20,7 +20,8 @@ Arguments:
                        e.g. 'MRNet-v1.0/valid_labels.csv'
 
 Options:
-  --loss-weight=<w>  Positive weight for BCEWithLogitsLoss [default: 1.0]
+  --loss-weight=<w>    Positive weight for BCEWithLogitsLoss [default: 1.0]
+  --output-dir=<dir>   Directory to save ROC curves [default: .]
 """
 
 import os
@@ -37,8 +38,12 @@ import matplotlib.pyplot as plt
 from sklearn import metrics
 
 
-def plot_roc_curves(results, diagnoses):
+def plot_roc_curves(results, diagnoses, output_dir='.'):
     """Generate and save ROC curves for each diagnosis."""
+    # Create output directory if it doesn't exist
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
     n_diagnoses = len(diagnoses)
     
     # Create subplots
@@ -58,26 +63,27 @@ def plot_roc_curves(results, diagnoses):
         labels = m['labels']
         
         # Plot ROC curve
-        axes[idx].plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {auc:.4f})')
-        axes[idx].plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--', label='Random classifier')
+        axes[idx].plot(fpr, tpr, color='darkorange', lw=2, label=f'Curva ROC (AUC = {auc:.4f})')
+        axes[idx].plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--', label='Clasificador aleatorio')
         
         # Find optimal threshold point on ROC curve using Youden's J
         youden_j = tpr - fpr
         optimal_idx = np.argmax(youden_j)
         axes[idx].plot(fpr[optimal_idx], tpr[optimal_idx], 'ro', markersize=8, 
-                      label=f'Optimal threshold = {threshold:.4f}')
+                      label=f'Umbral óptimo = {threshold:.4f}')
         
         axes[idx].set_xlim([0.0, 1.0])
         axes[idx].set_ylim([0.0, 1.05])
-        axes[idx].set_xlabel('False Positive Rate')
-        axes[idx].set_ylabel('True Positive Rate')
-        axes[idx].set_title(f'ROC Curve - {diagnosis.upper()}')
+        axes[idx].set_xlabel('1 - Especificidad (FPR)')
+        axes[idx].set_ylabel('Sensibilidad (TPR)')
+        axes[idx].set_title(f'Curva ROC - {diagnosis.upper()}')
         axes[idx].legend(loc="lower right")
         axes[idx].grid(alpha=0.3)
     
+    output_path = os.path.join(output_dir, 'roc_curves.png')
     plt.tight_layout()
-    plt.savefig('roc_curves.png', dpi=300, bbox_inches='tight')
-    print('ROC curves saved as roc_curves.png')
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    print(f'ROC curves saved to {output_path}')
     plt.close()
 
 
@@ -137,7 +143,7 @@ def calculate_metrics(predictions, labels, loss_weight=1.0):
     }
 
 
-def main(valid_paths_csv, preds_csv, valid_labels_csv, loss_weight=1.0):
+def main(valid_paths_csv, preds_csv, valid_labels_csv, loss_weight=1.0, output_dir='.'):
     print('Reporting AUC scores and additional metrics...\n')
 
     preds_df = pd.read_csv(preds_csv, header=None)
@@ -204,7 +210,7 @@ def main(valid_paths_csv, preds_csv, valid_labels_csv, loss_weight=1.0):
 
     # Generate ROC curves
     print('\n\nGenerating ROC curves...')
-    plot_roc_curves(results, diagnoses)
+    plot_roc_curves(results, diagnoses, output_dir)
 
     # Summary statistics
     print('\n\n' + '=' * 120)
@@ -231,8 +237,10 @@ if __name__ == '__main__':
     print('Parsing arguments...')
 
     loss_weight = float(arguments['--loss-weight']) if arguments['--loss-weight'] is not None else 1.0
+    output_dir = arguments['--output-dir'] if arguments['--output-dir'] is not None else '.'
 
     main(arguments['<valid_paths_csv>'],
          arguments['<preds_csv>'],
          arguments['<valid_labels_csv>'],
-         loss_weight)
+         loss_weight,
+         output_dir)
