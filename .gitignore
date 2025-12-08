@@ -10,3 +10,4 @@ __pycache__
 myenv
 src/lr_models_path.txt
 src/cnn_models_path.txt
+roc_curves.png
