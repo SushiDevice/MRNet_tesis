@@ -35,12 +35,18 @@ def main(data_dir, models_dir):
     conditions = ['abnormal', 'acl', 'meniscus']
     architectures = ['alexnet', 'convnext', 'resnext50']
 
+    # models será una lista de longitud 3 (una por condición),
+    # donde cada elemento es un dict:
+    # { 'axial': [model1, model2, ...],
+    #   'coronal': [...],
+    #   'sagittal': [...] }
     models = []
 
     print(f'Loading best CNN ensemble models from {models_dir}...')
 
     for condition in conditions:
-        models_per_condition = []
+        # Un contenedor por plano para esta condición
+        models_per_condition = {plane: [] for plane in planes}
         
         # Load AlexNet models
         for plane in planes:
@@ -51,7 +57,7 @@ def main(data_dir, models_dir):
                 
                 model = MRNet().to(device)
                 model.load_state_dict(checkpoint['state_dict'])
-                models_per_condition.append(model)
+                models_per_condition[plane].append(model)
         
         # Load ConvNext Tiny models
         for plane in planes:
@@ -62,7 +68,7 @@ def main(data_dir, models_dir):
                 
                 model = ConvNextTiny().to(device)
                 model.load_state_dict(checkpoint['state_dict'])
-                models_per_condition.append(model)
+                models_per_condition[plane].append(model)
         
         # Load ResNext50 models
         for plane in planes:
@@ -73,7 +79,7 @@ def main(data_dir, models_dir):
                 
                 model = ResNext50().to(device)
                 model.load_state_dict(checkpoint['state_dict'])
-                models_per_condition.append(model)
+                models_per_condition[plane].append(model)
 
         models.append(models_per_condition)
 
@@ -97,35 +103,48 @@ def main(data_dir, models_dir):
 
             ys.append(labels[0].cpu().tolist())
 
-            for i, ensemble_models in enumerate(models):
+            # Para cada condición, recolectamos las predicciones de TODOS
+            # los modelos asociados a cada plano.
+            for cond_idx, condition_models in enumerate(models):
                 X = []
-                
-                # Collect predictions from each architecture
-                for j in range(0, len(ensemble_models), 3):  # 3 planes per architecture
-                    if j + 2 < len(ensemble_models):
-                        axial_pred = ensemble_models[j](axial_inputs).detach().cpu().item()
-                        coronal_pred = ensemble_models[j+1](coronal_inputs).detach().cpu().item()
-                        sagittal_pred = ensemble_models[j+2](sagittal_inputs).detach().cpu().item()
-                        
-                        X.extend([axial_pred, coronal_pred, sagittal_pred])
 
-                Xs[i].append(X)
+                # Orden consistente de features: primero todos los axiales,
+                # luego todos los coronales y por último los sagitales.
+                for model in condition_models['axial']:
+                    axial_pred = model(axial_inputs).detach().cpu().item()
+                    X.append(axial_pred)
+
+                for model in condition_models['coronal']:
+                    coronal_pred = model(coronal_inputs).detach().cpu().item()
+                    X.append(coronal_pred)
+
+                for model in condition_models['sagittal']:
+                    sagittal_pred = model(sagittal_inputs).detach().cpu().item()
+                    X.append(sagittal_pred)
+
+                Xs[cond_idx].append(X)
 
             pbar.update(1)
 
     ys = np.asarray(ys).transpose()
-    Xs = np.asarray(Xs)
 
     print(f'Training logistic regression models for each condition...')
 
     clfs = []
 
+    # Importante: cada condición puede tener un número distinto de modelos
+    # (por ejemplo, algunas con AlexNet+ConvNeXt+ResNext50 y otras con menos).
+    # Por eso no convertimos Xs en un único array 3D; en su lugar,
+    # trabajamos condición por condición.
     for X, y in zip(Xs, ys):
+        X = np.asarray(X)  # (n_casos, n_features_condicion)
         clf = LogisticRegressionCV(cv=5, random_state=0).fit(X, y)
         clfs.append(clf)
 
-    for i, clf in enumerate(clfs):
-        print(f'Cross validation score for {conditions[i]}: {clf.score(X, y):.3f}')
+    # Imprimir score usando los mismos datos con los que se entrenó
+    for i, (X_cond, y_cond, clf) in enumerate(zip(Xs, ys, clfs)):
+        X_cond = np.asarray(X_cond)
+        print(f'Cross validation score for {conditions[i]}: {clf.score(X_cond, y_cond):.3f}')
         clf_path = f'{models_dir}/lr_ensemble_{conditions[i]}.pkl'
         joblib.dump(clf, clf_path)
 
