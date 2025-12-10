@@ -61,9 +61,14 @@ def main(valid_paths_csv, output_dir, models_dir):
     # Load ensemble CNN models
     print(f'Loading CNN ensemble models from {models_dir}...')
 
-    mrnets = [[], [], []]  # [abnormal, acl, meniscus]
+    # Estructura análoga a new_train_lr_ensamble.py:
+    # lista de condiciones, cada una con un dict por plano.
+    # mrnets[cond_idx][plane] -> lista de modelos.
+    mrnets = []
 
-    for condition_idx, condition in enumerate(conditions):
+    for condition in conditions:
+        condition_models = {plane: [] for plane in planes}
+
         # Load AlexNet models
         for plane in planes:
             checkpoint_pattern = glob(f'{models_dir}/alexnet_*{plane}*{condition}*.pt')
@@ -72,7 +77,7 @@ def main(valid_paths_csv, output_dir, models_dir):
                 model = MRNet().to(device)
                 checkpoint = torch.load(checkpoint_path, map_location=device)
                 model.load_state_dict(checkpoint['state_dict'])
-                mrnets[condition_idx].append(model)
+                condition_models[plane].append(model)
 
         # Load ConvNext Tiny models
         for plane in planes:
@@ -82,7 +87,7 @@ def main(valid_paths_csv, output_dir, models_dir):
                 model = ConvNextTiny().to(device)
                 checkpoint = torch.load(checkpoint_path, map_location=device)
                 model.load_state_dict(checkpoint['state_dict'])
-                mrnets[condition_idx].append(model)
+                condition_models[plane].append(model)
 
         # Load ResNext50 models
         for plane in planes:
@@ -92,7 +97,9 @@ def main(valid_paths_csv, output_dir, models_dir):
                 model = ResNext50().to(device)
                 checkpoint = torch.load(checkpoint_path, map_location=device)
                 model.load_state_dict(checkpoint['state_dict'])
-                mrnets[condition_idx].append(model)
+                condition_models[plane].append(model)
+
+        mrnets.append(condition_models)
 
     # Load logistic regression ensemble models
     print(f'Loading logistic regression ensemble models from {models_dir}...')
@@ -130,20 +137,30 @@ def main(valid_paths_csv, output_dir, models_dir):
 
         case_preds = []
 
-        for cond_idx, ensemble_models in enumerate(mrnets):  # For each condition
+        for cond_idx, condition_models in enumerate(mrnets):  # For each condition
             X = []
-            
-            # Collect predictions from each plane of each architecture
-            for arch_idx in range(0, len(ensemble_models), 3):  # 3 planes per architecture
-                if arch_idx + 2 < len(ensemble_models):
-                    sagittal_pred = ensemble_models[arch_idx](data[0]).detach().cpu().item()
-                    coronal_pred = ensemble_models[arch_idx + 1](data[1]).detach().cpu().item()
-                    axial_pred = ensemble_models[arch_idx + 2](data[2]).detach().cpu().item()
-                    
-                    X.extend([axial_pred, coronal_pred, sagittal_pred])
+
+            # Importante: el orden de las features debe coincidir con el usado
+            # durante el entrenamiento en new_train_lr_ensamble.py
+            # Primero todos los modelos axiales, luego coronales, luego sagitales.
+            # En los CSV de paths, el orden por caso es: sagittal, coronal, axial
+            # (ver scripts/make_all_valid_paths.py), de modo que:
+            # data[0] -> sagittal, data[1] -> coronal, data[2] -> axial.
+
+            for model in condition_models['axial']:
+                axial_pred = model(data[2]).detach().cpu().item()
+                X.append(axial_pred)
+
+            for model in condition_models['coronal']:
+                coronal_pred = model(data[1]).detach().cpu().item()
+                X.append(coronal_pred)
+
+            for model in condition_models['sagittal']:
+                sagittal_pred = model(data[0]).detach().cpu().item()
+                X.append(sagittal_pred)
 
             # Combine predictions using logistic regression
-            if cond_idx < len(lrs):
+            if cond_idx < len(lrs) and len(X) > 0:
                 X_array = np.array([X])
                 pred = np.float64(lrs[cond_idx].predict_proba(X_array)[:, 1])
                 case_preds.append(pred)
