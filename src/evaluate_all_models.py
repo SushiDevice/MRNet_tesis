@@ -61,8 +61,11 @@ def evaluate_model(predictions, labels, loss_weight=1.0):
     youden_j = tpr - fpr
     optimal_idx = np.argmax(youden_j)
     optimal_threshold = thresholds[optimal_idx]
+    
+    # Convert logit threshold to probability space for display
+    optimal_threshold_prob = 1 / (1 + np.exp(-optimal_threshold))
 
-    # Get binary predictions using optimal threshold
+    # Get binary predictions using optimal threshold (in logit space)
     binary_preds = (predictions >= optimal_threshold).astype(int)
 
     # Calculate Sensitivity (True Positive Rate)
@@ -81,7 +84,7 @@ def evaluate_model(predictions, labels, loss_weight=1.0):
         'sensitivity': sensitivity,
         'specificity': specificity,
         'accuracy': accuracy,
-        'threshold': optimal_threshold,
+        'threshold': optimal_threshold_prob,
         'tp': tp,
         'tn': tn,
         'fp': fp,
@@ -127,9 +130,9 @@ def main(predictions_dir, data_paths_csv, labels_csv, loss_weight=1.0):
     # Dictionary to store results
     results = {}
 
-    print('=' * 100)
-    print(f'{"Task":<15} {"Plane":<12} {"AUC":<10} {"Loss":<10} {"Sensitivity":<15} {"Specificity":<15} {"Accuracy":<10}')
-    print('=' * 100)
+    print('=' * 120)
+    print(f'{"Task":<15} {"Plane":<12} {"AUC":<10} {"Loss":<10} {"Sensitivity":<15} {"Specificity":<15} {"Accuracy":<10} {"Threshold":<10}')
+    print('=' * 120)
 
     # Evaluate each model
     for task, plane in [(t, p) for t in tasks for p in planes]:
@@ -184,7 +187,7 @@ def main(predictions_dir, data_paths_csv, labels_csv, loss_weight=1.0):
 
         # Print results
         print(f'{task:<15} {plane:<12} {metrics_dict["auc"]:<10.4f} {metrics_dict["loss"]:<10.4f} '
-              f'{metrics_dict["sensitivity"]:<15.4f} {metrics_dict["specificity"]:<15.4f} {metrics_dict["accuracy"]:<10.4f}')
+              f'{metrics_dict["sensitivity"]:<15.4f} {metrics_dict["specificity"]:<15.4f} {metrics_dict["accuracy"]:<10.4f} {metrics_dict["threshold"]:<10.4f}')
 
     print('=' * 100)
 
