@@ -97,14 +97,17 @@ def batch_forward(models, inputs, labels, criterions):
     preds = []
     losses = []
 
-    for i, (model, label, criterion) in \
-            enumerate(zip(models, labels[0], criterions)):
-        model.eval()
+    # Sin autograd: la validacion no necesita el grafo de gradientes y sin
+    # esto guarda las activaciones de toda la serie igual que el entrenamiento.
+    with torch.no_grad():
+        for i, (model, label, criterion) in \
+                enumerate(zip(models, labels[0], criterions)):
+            model.eval()
 
-        out = model(inputs)
-        preds.append(out.item())
-        loss = criterion(out, label.unsqueeze(0))
-        losses.append(loss.item())
+            out = model(inputs)
+            preds.append(out.item())
+            loss = criterion(out, label.unsqueeze(0))
+            losses.append(loss.item())
 
     return np.array(preds), np.array(losses)
 
