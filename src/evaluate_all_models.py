@@ -2,7 +2,7 @@
 """Evaluates all 9 CNN models (3 tasks × 3 planes) and generates a report.
 
 Usage:
-  evaluate_all_models.py <predictions_dir> <data_paths_csv> <labels_csv> [--loss-weight=<w>] [--threshold=<t>] [--use-calculated-threshold]
+  evaluate_all_models.py <predictions_dir> <data_paths_csv> <labels_csv> [--loss-weight=<w>] [--threshold=<t>] [--use-calculated-threshold] [--output-dir=<dir>]
   evaluate_all_models.py (-h | --help)
 
 General options:
@@ -22,6 +22,7 @@ Options:
   --threshold=<t>             Fixed probability threshold for all models (e.g. 0.5). If omitted,
                               the script uses 0.5 by default unless --use-calculated-threshold is passed.
   --use-calculated-threshold  Use the model-specific Youden J threshold instead of a fixed threshold.
+  --output-dir=<dir>          Directory where the Excel summary will be saved [default: .]
 """
 
 import os
@@ -110,7 +111,7 @@ def evaluate_model(predictions, labels, loss_weight=1.0, threshold=None, use_cal
     }
 
 
-def main(predictions_dir, data_paths_csv, labels_csv, loss_weight=1.0, threshold=None, use_calculated_threshold=False):
+def main(predictions_dir, data_paths_csv, labels_csv, loss_weight=1.0, threshold=None, use_calculated_threshold=False, output_dir='.'):
     print('Evaluating all models...\n')
 
     # Load data paths
@@ -252,6 +253,31 @@ def main(predictions_dir, data_paths_csv, labels_csv, loss_weight=1.0, threshold
         print(f'Specificity: Mean: {np.mean(specificities):.4f} ± {np.std(specificities):.4f} | Min: {np.min(specificities):.4f} | Max: {np.max(specificities):.4f}')
         print(f'Accuracy:    Mean: {np.mean(accuracies):.4f} ± {np.std(accuracies):.4f} | Min: {np.min(accuracies):.4f} | Max: {np.max(accuracies):.4f}')
 
+    if results:
+        excel_rows = []
+        for (task, plane), metrics_dict in results.items():
+            excel_rows.append({
+                'task': task,
+                'plane': plane,
+                'auc': metrics_dict['auc'],
+                'loss': metrics_dict['loss'],
+                'sensitivity': metrics_dict['sensitivity'],
+                'specificity': metrics_dict['specificity'],
+                'accuracy': metrics_dict['accuracy'],
+                'threshold': metrics_dict['threshold'],
+                'tp': metrics_dict['tp'],
+                'tn': metrics_dict['tn'],
+                'fp': metrics_dict['fp'],
+                'fn': metrics_dict['fn']
+            })
+
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
+        excel_path = os.path.join(output_dir, 'all_models_metrics.xlsx')
+        pd.DataFrame(excel_rows).to_excel(excel_path, index=False)
+        print(f'Excel summary saved to {excel_path}')
+
 
 if __name__ == '__main__':
     arguments = docopt(__doc__)
@@ -261,10 +287,12 @@ if __name__ == '__main__':
     loss_weight = float(arguments['--loss-weight']) if arguments['--loss-weight'] is not None else 1.0
     threshold = float(arguments['--threshold']) if arguments['--threshold'] is not None else None
     use_calculated_threshold = bool(arguments['--use-calculated-threshold'])
+    output_dir = arguments['--output-dir'] if arguments['--output-dir'] is not None else '.'
 
     main(arguments['<predictions_dir>'],
          arguments['<data_paths_csv>'],
          arguments['<labels_csv>'],
          loss_weight,
          threshold=threshold,
-         use_calculated_threshold=use_calculated_threshold)
+         use_calculated_threshold=use_calculated_threshold,
+         output_dir=output_dir)

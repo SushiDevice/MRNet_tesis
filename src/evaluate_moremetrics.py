@@ -99,8 +99,8 @@ def calculate_metrics(predictions, labels, loss_weight=1.0, threshold=None, use_
         predictions = predictions[:min_len]
         labels = labels[:min_len]
 
-    # Convert logits to probabilities using sigmoid
-    probs = 1 / (1 + np.exp(-predictions))
+    # Predictions are already probabilities from predict.py
+    probs = predictions
 
     # Calculate AUC
     auc = metrics.roc_auc_score(labels, predictions)
@@ -117,7 +117,7 @@ def calculate_metrics(predictions, labels, loss_weight=1.0, threshold=None, use_
     youden_j = tpr - fpr
     optimal_idx = np.argmax(youden_j)
     optimal_threshold = thresholds[optimal_idx]
-    optimal_threshold_prob = 1 / (1 + np.exp(-optimal_threshold))
+    optimal_threshold_prob = optimal_threshold
 
     if use_calculated_threshold:
         decision_threshold = optimal_threshold_prob
@@ -249,6 +249,30 @@ def main(valid_paths_csv, preds_csv, valid_labels_csv, loss_weight=1.0, output_d
         print(f'Sensitivity: Mean: {np.mean(sensitivities):.4f} ± {np.std(sensitivities):.4f} | Min: {np.min(sensitivities):.4f} | Max: {np.max(sensitivities):.4f}')
         print(f'Specificity: Mean: {np.mean(specificities):.4f} ± {np.std(specificities):.4f} | Min: {np.min(specificities):.4f} | Max: {np.max(specificities):.4f}')
         print(f'Accuracy:    Mean: {np.mean(accuracies):.4f} ± {np.std(accuracies):.4f} | Min: {np.min(accuracies):.4f} | Max: {np.max(accuracies):.4f}')
+
+    if results:
+        excel_rows = []
+        for diagnosis, metrics_dict in results.items():
+            excel_rows.append({
+                'diagnosis': diagnosis,
+                'auc': metrics_dict['auc'],
+                'loss': metrics_dict['loss'],
+                'sensitivity': metrics_dict['sensitivity'],
+                'specificity': metrics_dict['specificity'],
+                'accuracy': metrics_dict['accuracy'],
+                'threshold': metrics_dict['threshold'],
+                'tp': metrics_dict['tp'],
+                'tn': metrics_dict['tn'],
+                'fp': metrics_dict['fp'],
+                'fn': metrics_dict['fn']
+            })
+
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
+        excel_path = os.path.join(output_dir, 'moremetrics_summary.xlsx')
+        pd.DataFrame(excel_rows).to_excel(excel_path, index=False)
+        print(f'Excel summary saved to {excel_path}')
 
 
 if __name__ == '__main__':
