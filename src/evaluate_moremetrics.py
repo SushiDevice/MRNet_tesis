@@ -2,6 +2,8 @@
 """Calculates the average AUC score of the abnormality detection, ACL tear and
 Meniscal tear tasks, along with additional metrics (sensitivity, specificity, accuracy, loss).
 
+(Este archivo calcula el AUC + otras metricas de modelos ENSAMBLADOS)
+
 Usage:
   evaluate_moremetrics.py <valid_paths_csv> <preds_csv> <valid_labels_csv> [--loss-weight=<w>] [--output-dir=<dir>] [--threshold=<t>] [--use-calculated-threshold]
   evaluate_moremetrics.py (-h | --help)
@@ -238,17 +240,19 @@ def main(valid_paths_csv, preds_csv, valid_labels_csv, loss_weight=1.0, output_d
     print('=' * 120)
 
     if results:
-        aucs = [m['auc'] for m in results.values()]
-        losses = [m['loss'] for m in results.values()]
-        sensitivities = [m['sensitivity'] for m in results.values()]
-        specificities = [m['specificity'] for m in results.values()]
-        accuracies = [m['accuracy'] for m in results.values()]
+        summary_metrics = ['auc', 'loss', 'sensitivity', 'specificity', 'accuracy',
+                           'threshold', 'tp', 'tn', 'fp', 'fn']
+        summary_stats = {
+            metric: {
+                'mean': np.mean([m[metric] for m in results.values()]),
+                'std': np.std([m[metric] for m in results.values()])
+            }
+            for metric in summary_metrics
+        }
 
-        print(f'AUC:         Mean: {np.mean(aucs):.4f} ± {np.std(aucs):.4f} | Min: {np.min(aucs):.4f} | Max: {np.max(aucs):.4f}')
-        print(f'Loss:        Mean: {np.mean(losses):.4f} ± {np.std(losses):.4f} | Min: {np.min(losses):.4f} | Max: {np.max(losses):.4f}')
-        print(f'Sensitivity: Mean: {np.mean(sensitivities):.4f} ± {np.std(sensitivities):.4f} | Min: {np.min(sensitivities):.4f} | Max: {np.max(sensitivities):.4f}')
-        print(f'Specificity: Mean: {np.mean(specificities):.4f} ± {np.std(specificities):.4f} | Min: {np.min(specificities):.4f} | Max: {np.max(specificities):.4f}')
-        print(f'Accuracy:    Mean: {np.mean(accuracies):.4f} ± {np.std(accuracies):.4f} | Min: {np.min(accuracies):.4f} | Max: {np.max(accuracies):.4f}')
+        for metric in summary_metrics:
+            stats = summary_stats[metric]
+            print(f'{metric.capitalize():<13} Mean: {stats["mean"]:.4f} ± {stats["std"]:.4f}')
 
     if results:
         excel_rows = []
@@ -266,6 +270,12 @@ def main(valid_paths_csv, preds_csv, valid_labels_csv, loss_weight=1.0, output_d
                 'fp': metrics_dict['fp'],
                 'fn': metrics_dict['fn']
             })
+
+        for summary_name in ['mean', 'std']:
+            row = {'diagnosis': summary_name}
+            for metric in summary_metrics:
+                row[metric] = summary_stats[metric][summary_name]
+            excel_rows.append(row)
 
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
