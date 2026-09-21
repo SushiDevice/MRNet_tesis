@@ -90,6 +90,7 @@ def evaluate_model(predictions, labels, loss_weight=1.0, threshold=None, use_cal
 
     # Calculate Sensitivity (True Positive Rate)
     sensitivity = metrics.recall_score(labels, binary_preds)
+    f1 = metrics.f1_score(labels, binary_preds, zero_division=0)
 
     # Calculate Specificity (True Negative Rate)
     tn, fp, fn, tp = metrics.confusion_matrix(labels, binary_preds).ravel()
@@ -102,6 +103,7 @@ def evaluate_model(predictions, labels, loss_weight=1.0, threshold=None, use_cal
         'auc': auc,
         'loss': loss,
         'sensitivity': sensitivity,
+        'f1': f1,
         'specificity': specificity,
         'accuracy': accuracy,
         'threshold': decision_threshold,
@@ -211,9 +213,8 @@ def main(predictions_dir, data_paths_csv, labels_csv, loss_weight=1.0, threshold
         )
         results[key] = metrics_dict
 
+
         # Print results
-        print(f'{task:<15} {plane:<12} {metrics_dict["auc"]:<10.4f} {metrics_dict["loss"]:<10.4f} '
-              f'{metrics_dict["sensitivity"]:<15.4f} {metrics_dict["specificity"]:<15.4f} {metrics_dict["accuracy"]:<10.4f} {metrics_dict["threshold"]:<10.4f}')
 
     print('=' * 100)
 
@@ -231,6 +232,7 @@ def main(predictions_dir, data_paths_csv, labels_csv, loss_weight=1.0, threshold
         print(f'  AUC:         {m["auc"]:.4f}')
         print(f'  Loss:        {m["loss"]:.4f}')
         print(f'  Sensitivity: {m["sensitivity"]:.4f}')
+        print(f'  F1-score:    {m["f1"]:.4f}')
         print(f'  Specificity: {m["specificity"]:.4f}')
         print(f'  Accuracy:    {m["accuracy"]:.4f}')
         print(f'  Threshold:   {m["threshold"]:.4f}')
@@ -242,7 +244,7 @@ def main(predictions_dir, data_paths_csv, labels_csv, loss_weight=1.0, threshold
     print('=' * 100)
 
     if results:
-        summary_metrics = ['auc', 'loss', 'sensitivity', 'specificity', 'accuracy',
+        summary_metrics = ['auc', 'loss', 'sensitivity', 'f1', 'specificity', 'accuracy',
                            'threshold', 'tp', 'tn', 'fp', 'fn']
         summary_stats = {
             metric: {
@@ -267,6 +269,7 @@ def main(predictions_dir, data_paths_csv, labels_csv, loss_weight=1.0, threshold
                 'auc': metrics_dict['auc'],
                 'loss': metrics_dict['loss'],
                 'sensitivity': metrics_dict['sensitivity'],
+                'f1': metrics_dict['f1'],
                 'specificity': metrics_dict['specificity'],
                 'accuracy': metrics_dict['accuracy'],
                 'threshold': metrics_dict['threshold'],
@@ -285,7 +288,7 @@ def main(predictions_dir, data_paths_csv, labels_csv, loss_weight=1.0, threshold
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
-        excel_path = os.path.join(output_dir, 'all_models_metrics.xlsx')
+        excel_path = os.path.join(output_dir, 'individual_models_metrics.xlsx')
         pd.DataFrame(excel_rows).to_excel(excel_path, index=False)
         print(f'Excel summary saved to {excel_path}')
 
