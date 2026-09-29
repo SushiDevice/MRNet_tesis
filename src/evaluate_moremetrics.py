@@ -138,6 +138,7 @@ def calculate_metrics(predictions, labels, loss_weight=1.0, threshold=None, use_
     # Calculate Specificity (True Negative Rate)
     tn, fp, fn, tp = metrics.confusion_matrix(labels, binary_preds).ravel()
     specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
 
     # Calculate Accuracy
     accuracy = metrics.accuracy_score(labels, binary_preds)
@@ -146,16 +147,17 @@ def calculate_metrics(predictions, labels, loss_weight=1.0, threshold=None, use_
         'auc': auc,
         'loss': loss,
         'sensitivity': sensitivity,
-        'f1': f1,
+        'precision': precision,
         'specificity': specificity,
         'accuracy': accuracy,
-        'threshold': decision_threshold,
+        'f1': f1,
         'tp': tp,
         'tn': tn,
         'fp': fp,
         'fn': fn,
         'fpr': fpr,
         'tpr': tpr,
+        'threshold': decision_threshold,
         'predictions': predictions,
         'labels': labels
     }
@@ -198,7 +200,7 @@ def main(valid_paths_csv, preds_csv, valid_labels_csv, loss_weight=1.0, output_d
     diagnoses = valid_df.columns.values[1:]
 
     print('=' * 120)
-    print(f'{"Diagnosis":<15} {"AUC":<10} {"Loss":<10} {"Sensitivity":<15} {"Specificity":<15} {"Accuracy":<10} {"Threshold":<10}')
+    print(f'{"Diagnosis":<15} {"AUC":<10} {"Loss":<10} {"Sensitivity":<15} {"Precision":<15} {"Specificity":<15} {"Accuracy":<10} {"Threshold":<10}')
     print('=' * 120)
 
     for i, diagnosis in enumerate(diagnoses):
@@ -223,13 +225,14 @@ def main(valid_paths_csv, preds_csv, valid_labels_csv, loss_weight=1.0, output_d
         m = results[diagnosis]
         print(f'\n{diagnosis.upper()}:')
         print(f'  AUC:         {m["auc"]:.4f}')
-        print(f'  Loss:        {m["loss"]:.4f}')
         print(f'  Sensitivity: {m["sensitivity"]:.4f}')
-        print(f'  F1-score:    {m["f1"]:.4f}')
         print(f'  Specificity: {m["specificity"]:.4f}')
         print(f'  Accuracy:    {m["accuracy"]:.4f}')
-        print(f'  Threshold:   {m["threshold"]:.4f}')
+        print(f'  Precision:   {m["precision"]:.4f}')
+        print(f'  F1-score:    {m["f1"]:.4f}')
         print(f'  TP: {m["tp"]:<5} TN: {m["tn"]:<5} FP: {m["fp"]:<5} FN: {m["fn"]:<5}')
+        print(f'  Threshold:   {m["threshold"]:.4f}')
+        print(f'  Loss:        {m["loss"]:.4f}')
 
     # Generate ROC curves
     print('\n\nGenerating ROC curves...')
@@ -241,7 +244,7 @@ def main(valid_paths_csv, preds_csv, valid_labels_csv, loss_weight=1.0, output_d
     print('=' * 120)
 
     if results:
-        summary_metrics = ['auc', 'loss', 'sensitivity', 'f1', 'specificity', 'accuracy',
+        summary_metrics = ['auc', 'loss', 'sensitivity', 'precision', 'f1', 'specificity', 'accuracy',
                            'threshold', 'tp', 'tn', 'fp', 'fn']
         summary_stats = {
             metric: {
@@ -261,16 +264,17 @@ def main(valid_paths_csv, preds_csv, valid_labels_csv, loss_weight=1.0, output_d
             excel_rows.append({
                 'diagnosis': diagnosis,
                 'auc': metrics_dict['auc'],
-                'loss': metrics_dict['loss'],
                 'sensitivity': metrics_dict['sensitivity'],
-                'f1': metrics_dict['f1'],
                 'specificity': metrics_dict['specificity'],
                 'accuracy': metrics_dict['accuracy'],
-                'threshold': metrics_dict['threshold'],
+                'precision': metrics_dict['precision'],
+                'f1': metrics_dict['f1'],
                 'tp': metrics_dict['tp'],
                 'tn': metrics_dict['tn'],
                 'fp': metrics_dict['fp'],
-                'fn': metrics_dict['fn']
+                'fn': metrics_dict['fn'],
+                'loss': metrics_dict['loss'],
+                'threshold': metrics_dict['threshold'],
             })
 
         for summary_name in ['mean', 'std']:
