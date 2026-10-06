@@ -197,6 +197,12 @@ Para entrenar regresión logística con el nuevo split, correr:
 ```terminal
 $ python -u src/new_train_lr_models.py MRNet-v1.0 path/to/models
 ```
+Además de esto, renombrar los modelos con esta convención para el ensamble:
+```terminal
+alexnet_... .pt
+convnext_... .pt
+resnext50... .pt
+```
 
 Note that the code will look for the **best CNN checkpoints** saved in the `models_dir` by sorting each model and taking the *last one*. This is because in `src/train_cnn_models.py`, checkpoints are saved in a format `cnn_{plane}_{diagnosis}_{epoch:02d}.pt` every time the minimum validation loss is achieved. Hence the one with the **largest epoch value** per model is considered the best.
 
