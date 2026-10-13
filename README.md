@@ -197,6 +197,12 @@ Para entrenar regresión logística con el nuevo split, correr:
 ```terminal
 $ python -u src/new_train_lr_models.py MRNet-v1.0 path/to/models
 ```
+
+Para entrenar regresión logística con diferentes modelos (ensamble) en el nuevo split, correr:
+```terminal
+$ python -u src/new_train_lr_ensamble.py MRNet-v1.0 path/to/models
+```
+
 Además de esto, renombrar los modelos con esta convención para el ensamble:
 ```terminal
 alexnet_... .pt
@@ -293,6 +299,11 @@ The output should look like this (mock data):
 Si queremos hacer predicciones sobre el nuevo set de testeo, correr:
 ```terminal
 python src/predict.py out/test_split1_paths.csv out/
+```
+
+Si queremos hacer predicciones con un modelo ensamblado, correr:
+```terminal
+python -u .\src\predict_ensamble.py ruta/paths/testsplit ruta/output ruta/modelos                     
 ```
 
 #### 5.2. Calculate AUC scores
