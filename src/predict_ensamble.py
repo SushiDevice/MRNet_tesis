@@ -77,6 +77,7 @@ def main(valid_paths_csv, output_dir, models_dir):
                 model = MRNet().to(device)
                 checkpoint = torch.load(checkpoint_path, map_location=device)
                 model.load_state_dict(checkpoint['state_dict'])
+                model.eval()
                 condition_models[plane].append(model)
 
         # Load ConvNext Tiny models
@@ -87,6 +88,7 @@ def main(valid_paths_csv, output_dir, models_dir):
                 model = ConvNextTiny().to(device)
                 checkpoint = torch.load(checkpoint_path, map_location=device)
                 model.load_state_dict(checkpoint['state_dict'])
+                model.eval()
                 condition_models[plane].append(model)
 
         # Load ResNext50 models
@@ -97,6 +99,7 @@ def main(valid_paths_csv, output_dir, models_dir):
                 model = ResNext50().to(device)
                 checkpoint = torch.load(checkpoint_path, map_location=device)
                 model.load_state_dict(checkpoint['state_dict'])
+                model.eval()
                 condition_models[plane].append(model)
 
         mrnets.append(condition_models)
@@ -147,17 +150,18 @@ def main(valid_paths_csv, output_dir, models_dir):
             # (ver scripts/make_all_valid_paths.py), de modo que:
             # data[0] -> sagittal, data[1] -> coronal, data[2] -> axial.
 
-            for model in condition_models['axial']:
-                axial_pred = model(data[2]).detach().cpu().item()
-                X.append(axial_pred)
+            with torch.no_grad():
+                for model in condition_models['axial']:
+                    axial_pred = model(data[2]).cpu().item()
+                    X.append(axial_pred)
 
-            for model in condition_models['coronal']:
-                coronal_pred = model(data[1]).detach().cpu().item()
-                X.append(coronal_pred)
+                for model in condition_models['coronal']:
+                    coronal_pred = model(data[1]).cpu().item()
+                    X.append(coronal_pred)
 
-            for model in condition_models['sagittal']:
-                sagittal_pred = model(data[0]).detach().cpu().item()
-                X.append(sagittal_pred)
+                for model in condition_models['sagittal']:
+                    sagittal_pred = model(data[0]).cpu().item()
+                    X.append(sagittal_pred)
 
             # Combine predictions using logistic regression
             if cond_idx < len(lrs) and len(X) > 0:

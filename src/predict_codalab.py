@@ -35,6 +35,7 @@ def main(valid_paths_csv, output_csv):
         model = MRNet().to(device)
         checkpoint = torch.load(mrnet_path, map_location=device)
         model.load_state_dict(checkpoint['state_dict'])
+        model.eval()
 
         if i < 3:
             abnormal_mrnets.append(model)
@@ -78,9 +79,10 @@ def main(valid_paths_csv, output_csv):
 
         for i, mrnet in enumerate(mrnets):  # For each condition (mrnet)
             # Based on each plane (data)
-            sagittal_pred = mrnet[0](data[0]).detach().cpu().item()
-            coronal_pred = mrnet[1](data[1]).detach().cpu().item()
-            axial_pred = mrnet[2](data[2]).detach().cpu().item()
+            with torch.no_grad():
+                sagittal_pred = mrnet[0](data[0]).cpu().item()
+                coronal_pred = mrnet[1](data[1]).cpu().item()
+                axial_pred = mrnet[2](data[2]).cpu().item()
 
             # Combine predictions to make a final prediction
 
