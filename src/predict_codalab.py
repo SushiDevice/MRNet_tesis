@@ -3,6 +3,7 @@
 import os
 import sys
 import csv
+import argparse
 from PIL import Image
 
 import torch
@@ -12,10 +13,11 @@ import joblib
 from torchvision import transforms
 
 from model import MRNet
-from utils import preprocess_data
+from utils import preprocess_data, set_seed
 
 
-def main(valid_paths_csv, output_csv):
+def main(valid_paths_csv, output_csv, seed=42):
+    set_seed(seed)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     input_files_df = pd.read_csv(valid_paths_csv, header=None)
@@ -97,7 +99,17 @@ def main(valid_paths_csv, output_csv):
 
 
 if __name__ == '__main__':
-    paths_csv = sys.argv[1]
-    output_csv = sys.argv[2]
+    parser = argparse.ArgumentParser(
+        description='Generate MRNet predictions for a Codalab submission.'
+    )
+    parser.add_argument('valid_paths_csv')
+    parser.add_argument('output_csv')
+    parser.add_argument(
+        '--seed',
+        type=int,
+        default=42,
+        help='Seed used by Python, NumPy, and PyTorch (default: 42).'
+    )
+    arguments = parser.parse_args()
 
-    main(paths_csv, output_csv)
+    main(arguments.valid_paths_csv, arguments.output_csv, arguments.seed)

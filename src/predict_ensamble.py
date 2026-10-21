@@ -3,11 +3,12 @@
 (AlexNet, ConvNext Tiny, and ResNext50) and logistic regression models.
 
 Usage:
-  predict_ensamble.py <valid_paths_csv> <output_dir> <models_dir>
+  predict_ensamble.py <valid_paths_csv> <output_dir> <models_dir> [--seed=<seed>]
   predict_ensamble.py (-h | --help)
 
 General options:
   -h --help          Show this screen.
+  --seed=<seed>     Seed used by Python, NumPy, and PyTorch [default: 42].
 
 Arguments:
   <valid_paths_csv>  csv file listing paths to validation set, which needs to
@@ -38,10 +39,11 @@ import joblib
 from torchvision import transforms
 
 from model import MRNet, ConvNextTiny, ResNext50
-from utils import preprocess_data
+from utils import preprocess_data, set_seed
 
 
-def main(valid_paths_csv, output_dir, models_dir):
+def main(valid_paths_csv, output_dir, models_dir, seed=42):
+    set_seed(seed)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     planes = ['axial', 'coronal', 'sagittal']
     conditions = ['abnormal', 'acl', 'meniscus']
@@ -183,4 +185,5 @@ if __name__ == '__main__':
 
     main(arguments['<valid_paths_csv>'],
          arguments['<output_dir>'],
-         arguments['<models_dir>'])
+         arguments['<models_dir>'],
+         int(arguments['--seed']))

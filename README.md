@@ -234,11 +234,12 @@ in src/cnn_models_paths.txt and logistic regression models specified in
 src/lr_models_paths.txt
 
 Usage:
-  predict.py <valid_paths_csv> <output_dir>
+  predict.py <valid_paths_csv> <output_dir> [--seed=<seed>]
   predict.py (-h | --help)
 
 General options:
   -h --help          Show this screen.
+  --seed=<seed>     Seed used by Python, NumPy, and PyTorch [default: 42].
 
 Arguments:
   <valid_paths_csv>  csv file listing paths to validation set, which needs to
@@ -280,7 +281,7 @@ path/to/models/lr_meniscus.pkl
 Once we create these 2 files, we're ready to proceed. To generate predictions on the `valid` dataset, run:
 
 ```terminal
-$ python -u src/predict.py valid-paths.csv output/dir
+$ python -u src/predict.py valid-paths.csv output/dir --seed=42
 Loading CNN models listed in src/cnn_models_paths.txt...
 Loading logistic regression models listed in src/lr_models_paths.txt...
 Generating predictions per case...
@@ -298,12 +299,12 @@ The output should look like this (mock data):
 ```
 Si queremos hacer predicciones sobre el nuevo set de testeo, correr:
 ```terminal
-python src/predict.py out/test_split1_paths.csv out/
+python src/predict.py out/test_split1_paths.csv out/ --seed=42
 ```
 
 Si queremos hacer predicciones con un modelo ensamblado, correr:
 ```terminal
-python -u .\src\predict_ensamble.py ruta/paths/testsplit ruta/output ruta/modelos                     
+python -u .\src\predict_ensamble.py ruta/paths/testsplit ruta/output ruta/modelos --seed=42
 ```
 
 #### 5.2. Calculate AUC scores

@@ -1,5 +1,6 @@
 import os
 import csv
+import random
 
 import numpy as np
 import torch
@@ -8,6 +9,18 @@ from sklearn import metrics
 MAX_PIXEL_VAL = 255
 MEAN = 58.09
 STD = 49.73
+
+
+def set_seed(seed):
+    """Seed the random number generators used during prediction."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    if torch.backends.cudnn.is_available():
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 
 def preprocess_data(case_path, transform=None):
