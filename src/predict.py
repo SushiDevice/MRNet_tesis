@@ -4,11 +4,12 @@ in src/cnn_models_paths.txt and logistic regression models specified in
 src/lr_models_paths.txt.
 
 Usage:
-  predict.py <valid_paths_csv> <output_dir>
+  predict.py <valid_paths_csv> <output_dir> [--seed=<seed>]
   predict.py (-h | --help)
 
 General options:
   -h --help          Show this screen.
+  --seed=<seed>     Seed used by Python, NumPy, and PyTorch [default: 42].
 
 Arguments:
   <valid_paths_csv>  csv file listing paths to validation set, which needs to
@@ -36,10 +37,11 @@ import joblib
 from torchvision import transforms
 
 from model import MRNet
-from utils import preprocess_data
+from utils import preprocess_data, set_seed
 
 
-def main(valid_paths_csv, output_dir):
+def main(valid_paths_csv, output_dir, seed=42):
+    set_seed(seed)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     input_files_df = pd.read_csv(valid_paths_csv, header=None)
@@ -68,6 +70,7 @@ def main(valid_paths_csv, output_dir):
         model = MRNet().to(device)
         checkpoint = torch.load(mrnet_path, map_location=device)
         model.load_state_dict(checkpoint['state_dict'])
+        model.eval()
 
         if i < 3:
             abnormal_mrnets.append(model)
@@ -111,9 +114,10 @@ def main(valid_paths_csv, output_dir):
 
         for i, mrnet in enumerate(mrnets):  # For each condition (mrnet)
             # Based on each plane (data)
-            sagittal_pred = mrnet[0](data[0]).detach().cpu().item()
-            coronal_pred = mrnet[1](data[1]).detach().cpu().item()
-            axial_pred = mrnet[2](data[2]).detach().cpu().item()
+            with torch.no_grad():
+                sagittal_pred = mrnet[0](data[0]).cpu().item()
+                coronal_pred = mrnet[1](data[1]).cpu().item()
+                axial_pred = mrnet[2](data[2]).cpu().item()
 
             # Combine predictions to make a final prediction
 
@@ -133,4 +137,5 @@ if __name__ == '__main__':
     print('Parsing arguments...')
 
     main(arguments['<valid_paths_csv>'],
-         arguments['<output_dir>'])
+         arguments['<output_dir>'],
+         int(arguments['--seed']))

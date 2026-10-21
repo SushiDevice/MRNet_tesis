@@ -198,6 +198,18 @@ Para entrenar regresión logística con el nuevo split, correr:
 $ python -u src/new_train_lr_models.py MRNet-v1.0 path/to/models
 ```
 
+Para entrenar regresión logística con diferentes modelos (ensamble) en el nuevo split, correr:
+```terminal
+$ python -u src/new_train_lr_ensamble.py MRNet-v1.0 path/to/models
+```
+
+Además de esto, renombrar los modelos con esta convención para el ensamble:
+```terminal
+alexnet_... .pt
+convnext_... .pt
+resnext50... .pt
+```
+
 Note that the code will look for the **best CNN checkpoints** saved in the `models_dir` by sorting each model and taking the *last one*. This is because in `src/train_cnn_models.py`, checkpoints are saved in a format `cnn_{plane}_{diagnosis}_{epoch:02d}.pt` every time the minimum validation loss is achieved. Hence the one with the **largest epoch value** per model is considered the best.
 
 You will now have `lr_{diagnosis}.pkl` models saved to `path/to/models` directory, along with the checkpoints and losses.
@@ -222,11 +234,12 @@ in src/cnn_models_paths.txt and logistic regression models specified in
 src/lr_models_paths.txt
 
 Usage:
-  predict.py <valid_paths_csv> <output_dir>
+  predict.py <valid_paths_csv> <output_dir> [--seed=<seed>]
   predict.py (-h | --help)
 
 General options:
   -h --help          Show this screen.
+  --seed=<seed>     Seed used by Python, NumPy, and PyTorch [default: 42].
 
 Arguments:
   <valid_paths_csv>  csv file listing paths to validation set, which needs to
@@ -268,7 +281,7 @@ path/to/models/lr_meniscus.pkl
 Once we create these 2 files, we're ready to proceed. To generate predictions on the `valid` dataset, run:
 
 ```terminal
-$ python -u src/predict.py valid-paths.csv output/dir
+$ python -u src/predict.py valid-paths.csv output/dir --seed=42
 Loading CNN models listed in src/cnn_models_paths.txt...
 Loading logistic regression models listed in src/lr_models_paths.txt...
 Generating predictions per case...
@@ -286,7 +299,12 @@ The output should look like this (mock data):
 ```
 Si queremos hacer predicciones sobre el nuevo set de testeo, correr:
 ```terminal
-python src/predict.py out/test_split1_paths.csv out/
+python src/predict.py out/test_split1_paths.csv out/ --seed=42
+```
+
+Si queremos hacer predicciones con un modelo ensamblado, correr:
+```terminal
+python -u .\src\predict_ensamble.py ruta/paths/testsplit ruta/output ruta/modelos --seed=42
 ```
 
 #### 5.2. Calculate AUC scores
