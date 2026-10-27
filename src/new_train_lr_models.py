@@ -46,6 +46,7 @@ def main(data_dir, models_dir):
 
             model = MRNet().to(device)
             model.load_state_dict(checkpoint['state_dict'])
+            model.eval()
             models_per_condition.append(model)
 
         models.append(models_per_condition)
@@ -70,13 +71,14 @@ def main(data_dir, models_dir):
 
             ys.append(labels[0].cpu().tolist())
 
-            for i, model in enumerate(models):
-                axial_pred = model[0](axial_inputs).detach().cpu().item()
-                coronal_pred = model[1](coronal_inputs).detach().cpu().item()
-                sagittal_pred = model[2](sagittal_inputs).detach().cpu().item()
+            with torch.no_grad():
+                for i, model in enumerate(models):
+                    axial_pred = model[0](axial_inputs).cpu().item()
+                    coronal_pred = model[1](coronal_inputs).cpu().item()
+                    sagittal_pred = model[2](sagittal_inputs).cpu().item()
 
-                X = [axial_pred, coronal_pred, sagittal_pred]
-                Xs[i].append(X)
+                    X = [axial_pred, coronal_pred, sagittal_pred]
+                    Xs[i].append(X)
 
             pbar.update(1)
 
