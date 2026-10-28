@@ -57,6 +57,7 @@ def main(data_dir, models_dir):
                 
                 model = MRNet().to(device)
                 model.load_state_dict(checkpoint['state_dict'])
+                model.eval()
                 models_per_condition[plane].append(model)
         
         # Load ConvNext Tiny models
@@ -68,6 +69,7 @@ def main(data_dir, models_dir):
                 
                 model = ConvNextTiny().to(device)
                 model.load_state_dict(checkpoint['state_dict'])
+                model.eval()
                 models_per_condition[plane].append(model)
         
         # Load ResNext50 models
@@ -79,6 +81,7 @@ def main(data_dir, models_dir):
                 
                 model = ResNext50().to(device)
                 model.load_state_dict(checkpoint['state_dict'])
+                model.eval()
                 models_per_condition[plane].append(model)
 
         models.append(models_per_condition)
@@ -105,24 +108,25 @@ def main(data_dir, models_dir):
 
             # Para cada condición, recolectamos las predicciones de TODOS
             # los modelos asociados a cada plano.
-            for cond_idx, condition_models in enumerate(models):
-                X = []
+            with torch.no_grad():
+                for cond_idx, condition_models in enumerate(models):
+                    X = []
 
-                # Orden consistente de features: primero todos los axiales,
-                # luego todos los coronales y por último los sagitales.
-                for model in condition_models['axial']:
-                    axial_pred = model(axial_inputs).detach().cpu().item()
-                    X.append(axial_pred)
+                    # Orden consistente de features: primero todos los axiales,
+                    # luego todos los coronales y por último los sagitales.
+                    for model in condition_models['axial']:
+                        axial_pred = model(axial_inputs).cpu().item()
+                        X.append(axial_pred)
 
-                for model in condition_models['coronal']:
-                    coronal_pred = model(coronal_inputs).detach().cpu().item()
-                    X.append(coronal_pred)
+                    for model in condition_models['coronal']:
+                        coronal_pred = model(coronal_inputs).cpu().item()
+                        X.append(coronal_pred)
 
-                for model in condition_models['sagittal']:
-                    sagittal_pred = model(sagittal_inputs).detach().cpu().item()
-                    X.append(sagittal_pred)
+                    for model in condition_models['sagittal']:
+                        sagittal_pred = model(sagittal_inputs).cpu().item()
+                        X.append(sagittal_pred)
 
-                Xs[cond_idx].append(X)
+                    Xs[cond_idx].append(X)
 
             pbar.update(1)
 
