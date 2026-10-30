@@ -25,7 +25,7 @@ from sklearn.linear_model import LogisticRegressionCV
 import joblib
 
 from model import MRNet
-from data_loader import make_data_loader
+from data_loader_no_aug import make_data_loader  # sin aumento de datos: consistente con el paper
 
 
 def main(data_dir, models_dir):
